@@ -54,8 +54,8 @@ static char *user_view;
  * You do not need to modify this function.
  *
  */
-static void mm_num_pegs(int target[], int guess[], unsigned *num_black,
-			unsigned *num_white)
+static void
+mm_num_pegs(int target[], int guess[], unsigned *num_black, unsigned *num_white)
 {
 	size_t i;
 	size_t j;
@@ -63,23 +63,30 @@ static void mm_num_pegs(int target[], int guess[], unsigned *num_black,
 	bool peg_used[NUM_PEGS];
 
 	*num_black = 0;
-	for (i = 0; i < NUM_PEGS; i++) {
-		if (guess[i] == target[i]) {
+	for (i = 0; i < NUM_PEGS; i++)
+	{
+		if (guess[i] == target[i])
+		{
 			(*num_black)++;
 			peg_black[i] = true;
 			peg_used[i] = true;
-		} else {
+		}
+		else
+		{
 			peg_black[i] = false;
 			peg_used[i] = false;
 		}
 	}
 
 	*num_white = 0;
-	for (i = 0; i < NUM_PEGS; i++) {
+	for (i = 0; i < NUM_PEGS; i++)
+	{
 		if (peg_black[i])
 			continue;
-		for (j = 0; j < NUM_PEGS; j++) {
-			if (guess[i] == target[j] && !peg_used[j]) {
+		for (j = 0; j < NUM_PEGS; j++)
+		{
+			if (guess[i] == target[j] && !peg_used[j])
+			{
 				peg_used[j] = true;
 				(*num_white)++;
 				break;
@@ -107,8 +114,8 @@ static void mm_num_pegs(int target[], int guess[], unsigned *num_black,
  *
  * Return: number of bytes written to @ubuf, or negative on error
  */
-static ssize_t mm_read(struct file *filp, char __user * ubuf, size_t count,
-		       loff_t * ppos)
+static ssize_t mm_read(struct file *filp, char __user *ubuf, size_t count,
+					   loff_t *ppos)
 {
 	/* FIXME */
 	return -EPERM;
@@ -134,8 +141,8 @@ static ssize_t mm_read(struct file *filp, char __user * ubuf, size_t count,
  *
  * Return: @count, or negative on error
  */
-static ssize_t mm_write(struct file *filp, const char __user * ubuf,
-			size_t count, loff_t * ppos)
+static ssize_t mm_write(struct file *filp, const char __user *ubuf,
+						size_t count, loff_t *ppos)
 {
 	/* FIXME */
 	return -EPERM;
@@ -193,12 +200,26 @@ static int mm_mmap(struct file *filp, struct vm_area_struct *vma)
  *
  * Return: @count, or negative on error
  */
-static ssize_t mm_ctl_write(struct file *filp, const char __user * ubuf,
-			    size_t count, loff_t * ppos)
+static ssize_t mm_ctl_write(struct file *filp, const char __user *ubuf,
+							size_t count, loff_t *ppos)
 {
 	/* FIXME */
 	return -EPERM;
 }
+
+/** strcut to handle call backs to dev/mm */
+static const struct file_operations operations = {
+	.read = mm_read,
+	.write = mm_write,
+	.mmap = mm_mmap,
+};
+
+static struct miscdevice mastermind_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "mm",
+	.fops = &operations,
+	.mode = 0666,
+};
 
 /**
  * mastermind_init() - entry point into the Mastermind kernel module
@@ -208,12 +229,20 @@ static int __init mastermind_init(void)
 {
 	pr_info("Initializing the game.\n");
 	user_view = vmalloc(PAGE_SIZE);
-	if (!user_view) {
+	if (!user_view)
+	{
 		pr_err("Could not allocate memory\n");
 		return -ENOMEM;
 	}
 
 	/* YOUR CODE HERE */
+	int error;
+	error = misc_register(&mastermind_device);
+	if (error)
+	{
+		pr_err("can't misc_register :(\n");
+		return error;
+	}
 
 	return 0;
 }
@@ -227,6 +256,7 @@ static void __exit mastermind_exit(void)
 	vfree(user_view);
 
 	/* YOUR CODE HERE */
+	misc_deregister(&mastermind_device);
 }
 
 module_init(mastermind_init);
