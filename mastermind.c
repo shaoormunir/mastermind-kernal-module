@@ -210,8 +210,36 @@ static ssize_t mm_read(struct file *filp, char __user *ubuf, size_t count,
 static ssize_t mm_write(struct file *filp, const char __user *ubuf,
 						size_t count, loff_t *ppos)
 {
-	/* FIXME */
-	return -EPERM;
+	int correct_place_guesses = 0;
+	int correct_value_guesses = 0;
+	char temp_array[NUM_PEGS] = {};
+	int user_guess[NUM_PEGS] = {};
+	size_t i;
+	size_t j;
+	if (game_active)
+	{
+		if (count < NUM_PEGS)
+		{
+			return -EINVAL;
+		}
+		else
+		{
+			copy_from_user(temp_array, ubuf, NUM_PEGS);
+			for (i = 0; i < NUM_PEGS; i++)
+			{
+				user_guess[i] = temp_array[i] - '0';
+			}
+			mm_num_pegs(target_code, user_guess, &correct_place_guesses, &correct_value_guesses);
+			last_result[1] = '0' + correct_place_guesses;
+			last_result[3] = '0' + correct_value_guesses;
+			num_guesses++;
+			return count;
+		}
+	}
+	else
+	{
+		return -EINVAL;
+	}
 }
 
 /**
@@ -279,10 +307,7 @@ static ssize_t mm_ctl_write(struct file *filp, const char __user *ubuf,
 		temp_length = count;
 	}
 	printk("The value of temp_length is %ld", (long int)temp_length);
-	for (i = 0; i < temp_length; i++)
-	{
-		temp_array[i] = ubuf[i];
-	}
+	copy_from_user(temp_array, ubuf, temp_length);
 
 	if (compare_strings(temp_array, temp_length, "start", 5))
 	{
@@ -344,6 +369,7 @@ static int __init mastermind_init(void)
 	error = misc_register(&mastermind_device);
 	if (error)
 	{
+		printk("There was some error while registering main device.");
 		pr_err("can't misc_register :(\n");
 		return error;
 	}
@@ -352,6 +378,7 @@ static int __init mastermind_init(void)
 	error = misc_register(&mastermind_ctl_device);
 	if (error)
 	{
+		printk("There was some error while registering control device.");
 		pr_err("can't misc_register :(\n");
 		return error;
 	}
@@ -366,8 +393,7 @@ static void __exit mastermind_exit(void)
 	pr_info("Freeing resources.\n");
 	vfree(user_view);
 
-	/* YOUR CODE HERE */
-	misc_deregister(&mastermind_device);
+	/* YOUR CODE HERE */ misc_deregister(&mastermind_device);
 	misc_deregister(&mastermind_ctl_device);
 }
 
