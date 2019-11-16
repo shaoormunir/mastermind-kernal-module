@@ -9,7 +9,7 @@
 /*
  * Getting compilation warnings?  The Linux kernel is written against
  * C89, which means:
- *  - No // comments, and
+ *  - No // comments, and 
  *  - All variables must be declared at the top of functions.
  * Read ~/linux/Documentation/CodingStyle to ensure your project
  * compiles without warnings.
@@ -43,6 +43,42 @@ static char last_result[4];
 
 /** buffer that records all of user's guesses and their results */
 static char *user_view;
+
+bool compare_strings(const char *source_string, size_t source_size, const char *dest_string, size_t dest_size)
+{
+	bool areEqual = true;
+	size_t i;
+	size_t j;
+	for (i = 0, j = 0; i < source_size && j < dest_size; i++, j++)
+	{
+		if (source_string[i] != dest_string[j])
+		{
+			areEqual = false;
+			break;
+		}
+	}
+	return areEqual;
+}
+
+void initialize_game(void)
+{
+	size_t i;
+	target_code[0] = 4;
+	target_code[1] = 2;
+	target_code[2] = 1;
+	target_code[3] = 1;
+	num_guesses = 0;
+	for (i = 0; i < 4096; i++)
+	{
+		user_view[i] = 0;
+	}
+
+	game_active = true;
+	last_result[0] = 'B';
+	last_result[1] = '-';
+	last_result[2] = 'W';
+	last_result[3] = '-';
+}
 
 /**
  * mm_num_pegs() - calculate number of black pegs and number of white pegs
@@ -117,8 +153,38 @@ mm_num_pegs(int target[], int guess[], unsigned *num_black, unsigned *num_white)
 static ssize_t mm_read(struct file *filp, char __user *ubuf, size_t count,
 					   loff_t *ppos)
 {
-	/* FIXME */
-	return -EPERM;
+	size_t bytes_to_copy = 4;
+	if (bytes_to_copy > count && count > 0)
+	{
+		bytes_to_copy = count;
+	}
+	printk("%lld", (long long int)*ppos);
+	printk("Bytes to be written are %d", bytes_to_copy);
+	if (*ppos >= 4)
+	{
+		printk("The offset is greater than or equal to the bytes to be copied.");
+		return -1;
+	}
+	else
+	{
+		int copy_result = 0;
+		if (game_active)
+		{
+			printk("The game is active and the result is written.");
+			copy_result = copy_to_user(ubuf + *ppos, last_result, bytes_to_copy);
+		}
+		else
+		{
+			printk("The game is not active and the default value is written.");
+			copy_result = copy_to_user(ubuf + *ppos, "????", bytes_to_copy);
+		}
+		if (copy_result != 0)
+		{
+			return -1;
+		}
+		*ppos += bytes_to_copy;
+		return bytes_to_copy;
+	}
 }
 
 /**
@@ -203,12 +269,37 @@ static int mm_mmap(struct file *filp, struct vm_area_struct *vma)
 static ssize_t mm_ctl_write(struct file *filp, const char __user *ubuf,
 							size_t count, loff_t *ppos)
 {
-	/* FIXME */
-	return -EPERM;
+	size_t i;
+	printk("Writing the value to the requried place.\n");
+	char temp_array[8] = {};
+	size_t temp_length = 8;
+	printk("the value of count is %d", count);
+	if (count < 8)
+	{
+		temp_length = count;
+	}
+	printk("The value of temp_length is %ld", (long int)temp_length);
+	for (i = 0; i < temp_length; i++)
+	{
+		temp_array[i] = ubuf[i];
+	}
+
+	if (compare_strings(temp_array, temp_length, "start", 5))
+	{
+		printk("Starting the game");
+		initialize_game();
+	}
+	else if (compare_strings(temp_array, temp_length, "quit", 4))
+	{
+		printk("Quitting the game.");
+		game_active = false;
+	}
+
+	return count;
 }
 
 /** strcut to handle call backs to dev/mm */
-static const struct file_operations operations = {
+static const struct file_operations mm_operations = {
 	.read = mm_read,
 	.write = mm_write,
 	.mmap = mm_mmap,
@@ -217,7 +308,19 @@ static const struct file_operations operations = {
 static struct miscdevice mastermind_device = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "mm",
-	.fops = &operations,
+	.fops = &mm_operations,
+	.mode = 0666,
+};
+
+/** strcut to handle call backs to dev/mm */
+static const struct file_operations mm_ctl_operations = {
+	.write = mm_ctl_write,
+};
+
+static struct miscdevice mastermind_ctl_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "mm_ctl",
+	.fops = &mm_ctl_operations,
 	.mode = 0666,
 };
 
@@ -227,6 +330,7 @@ static struct miscdevice mastermind_device = {
  */
 static int __init mastermind_init(void)
 {
+	int error;
 	pr_info("Initializing the game.\n");
 	user_view = vmalloc(PAGE_SIZE);
 	if (!user_view)
@@ -236,7 +340,7 @@ static int __init mastermind_init(void)
 	}
 
 	/* YOUR CODE HERE */
-	int error;
+	printk("Registering main device.");
 	error = misc_register(&mastermind_device);
 	if (error)
 	{
@@ -244,6 +348,13 @@ static int __init mastermind_init(void)
 		return error;
 	}
 
+	printk("Registering control device.");
+	error = misc_register(&mastermind_ctl_device);
+	if (error)
+	{
+		pr_err("can't misc_register :(\n");
+		return error;
+	}
 	return 0;
 }
 
@@ -257,6 +368,7 @@ static void __exit mastermind_exit(void)
 
 	/* YOUR CODE HERE */
 	misc_deregister(&mastermind_device);
+	misc_deregister(&mastermind_ctl_device);
 }
 
 module_init(mastermind_init);
