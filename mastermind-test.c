@@ -9,7 +9,8 @@
 #include <sys/types.h>
 #include <sys/user.h>
 
-int main(void) {
+int main(void)
+{
 	printf("Hello, world!\n");
 	return 0;
 }

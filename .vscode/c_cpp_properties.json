@@ -3,7 +3,10 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "/usr/include/c++/7.4.0/",
+                "usr/local/include/",
+                "usr/include/"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
