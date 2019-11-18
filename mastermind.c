@@ -44,7 +44,13 @@ static char last_result[4];
 /** buffer that records all of user's guesses and their results */
 static char *user_view;
 
-bool compare_strings(const char *source_string, size_t source_size, const char *dest_string, size_t dest_size)
+/** number of bytes currently written to user view */
+static size_t user_view_size;
+
+/** pointer for the user_view */
+static loff_t user_view_pointer;
+
+static bool compare_strings(const char *source_string, size_t source_size, const char *dest_string, size_t dest_size)
 {
 	bool areEqual = true;
 	size_t i;
@@ -60,7 +66,7 @@ bool compare_strings(const char *source_string, size_t source_size, const char *
 	return areEqual;
 }
 
-void initialize_game(void)
+static void initialize_game(void)
 {
 	size_t i;
 	target_code[0] = 4;
@@ -72,7 +78,8 @@ void initialize_game(void)
 	{
 		user_view[i] = 0;
 	}
-
+	user_view_pointer = 0;
+	user_view_size = 0;
 	game_active = true;
 	last_result[0] = 'B';
 	last_result[1] = '-';
@@ -186,6 +193,68 @@ static ssize_t mm_read(struct file *filp, char __user *ubuf, size_t count,
 		return bytes_to_copy;
 	}
 }
+size_t convert_number_to_array(int number, char **result)
+{
+	int remainder;
+	int digit;
+	size_t i;
+	size_t array_size = 0;
+	remainder = number;
+	while (remainder > 0)
+	{
+		remainder = remainder / 10;
+		array_size++;
+	}
+	printk("Size of the array to print is: %d", (int)array_size);
+	*result = vmalloc(array_size);
+	remainder = number;
+	for (i = 0; i < array_size; i++)
+	{
+		digit = remainder % 10;
+		*result[i] = '0' + digit;
+		remainder = remainder / 10;
+	}
+	return array_size;
+}
+
+void write_last_result_to_user_view(char *user_guess)
+{
+	//Guess 1: 1234 | B1W2
+	char result_to_write[22];
+	char *guess_number_char_array;
+	size_t guess_array_size;
+	loff_t current_result_buffer_pointer;
+	scnprintf(result_to_write, 6, "Guess ");
+	current_result_buffer_pointer += 6;
+	guess_array_size = convert_number_to_array(num_guesses, &guess_number_char_array);
+	scnprintf(result_to_write + current_result_buffer_pointer, guess_array_size, guess_number_char_array);
+	current_result_buffer_pointer += guess_array_size;
+	scnprintf(result_to_write + current_result_buffer_pointer, 2, ": ");
+	current_result_buffer_pointer += 2;
+	scnprintf(result_to_write + current_result_buffer_pointer, 4, last_result);
+	current_result_buffer_pointer += 4;
+	scnprintf(result_to_write + current_result_buffer_pointer, 3, " | ");
+	current_result_buffer_pointer += 3;
+	scnprintf(result_to_write + current_result_buffer_pointer, NUM_PEGS, user_guess);
+	current_result_buffer_pointer += NUM_PEGS;
+	scnprintf(result_to_write + current_result_buffer_pointer, 1, "\n");
+	current_result_buffer_pointer += 1;
+	printk(result_to_write);
+	scnprintf(user_view + user_view_pointer, 22, result_to_write);
+	user_view_pointer += 22;
+	user_view_size += 22;
+}
+static void print_user_view(void)
+{
+	size_t i;
+
+	printk("Printing userview.\n");
+
+	for (i = 0; i < user_view_size; i++)
+	{
+		printk(user_view[i]);
+	}
+}
 
 /**
  * mm_write() - callback invoked when a process writes to /dev/mm
@@ -207,8 +276,9 @@ static ssize_t mm_read(struct file *filp, char __user *ubuf, size_t count,
  *
  * Return: @count, or negative on error
  */
-static ssize_t mm_write(struct file *filp, const char __user *ubuf,
-						size_t count, loff_t *ppos)
+static ssize_t
+mm_write(struct file *filp, const char __user *ubuf,
+		 size_t count, loff_t *ppos)
 {
 	int correct_place_guesses = 0;
 	int correct_value_guesses = 0;
@@ -233,6 +303,9 @@ static ssize_t mm_write(struct file *filp, const char __user *ubuf,
 			last_result[1] = '0' + correct_place_guesses;
 			last_result[3] = '0' + correct_value_guesses;
 			num_guesses++;
+			write_last_result_to_user_view(temp_array);
+			print_user_view();
+
 			return count;
 		}
 	}
