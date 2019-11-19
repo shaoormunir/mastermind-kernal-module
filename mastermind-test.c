@@ -200,7 +200,7 @@ int main(void)
 #endif
 	/** part 5 quits the game and checks the output for the inactive game */
 #ifdef TEST_PART_5
-	printf("Closing the device and checking output\n");
+	printf("Quitting the game and checking output\n");
 	write_to_device("/dev/mm_ctl", "quit", 4);
 	read_from_device("/dev/mm", last_result, 4);
 	CHECK_IS_STRING_EQUAL(last_result, "????", 4);
