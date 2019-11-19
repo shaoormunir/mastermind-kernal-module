@@ -1,4 +1,7 @@
-/* YOUR FILE-HEADER COMMENT HERE */
+/** 
+ * @Author:
+ * This file contains the code for the mastermind game, implemented using a miscellanious device driver.
+*/
 
 /*
  * This file uses kernel-doc style comments, which is similar to
@@ -28,6 +31,7 @@
 
 #define NUM_PEGS 4
 #define NUM_COLORS 6
+#define USER_VIEW_LINE_SIZE 22
 
 /** true if user is in the middle of a game */
 static bool game_active;
@@ -50,6 +54,14 @@ static size_t user_view_size;
 /** pointer for the user_view */
 static loff_t user_view_pointer;
 
+/**
+ * compare_strings() - takes in two char strings along with their sizes and checks if both strings
+ * are equal or not 
+ * @source_string: source string to compare
+ * @source_size: size of source string
+ * @dest_stirng: destination string
+ * @dest_size: size of destination string
+ * */
 static bool compare_strings(const char *source_string, size_t source_size, const char *dest_string, size_t dest_size)
 {
 	bool areEqual = true;
@@ -65,7 +77,9 @@ static bool compare_strings(const char *source_string, size_t source_size, const
 	}
 	return areEqual;
 }
-
+/**
+ * initialize_game() - initializes all required variables for the game
+ * */
 static void initialize_game(void)
 {
 	size_t i;
@@ -97,8 +111,7 @@ static void initialize_game(void)
  * You do not need to modify this function.
  *
  */
-static void
-mm_num_pegs(int target[], int guess[], unsigned *num_black, unsigned *num_white)
+static void mm_num_pegs(int target[], int guess[], unsigned *num_black, unsigned *num_white)
 {
 	size_t i;
 	size_t j;
@@ -160,16 +173,13 @@ mm_num_pegs(int target[], int guess[], unsigned *num_black, unsigned *num_white)
 static ssize_t mm_read(struct file *filp, char __user *ubuf, size_t count,
 					   loff_t *ppos)
 {
-	size_t bytes_to_copy = 4;
+	size_t bytes_to_copy = 4 - *ppos;
 	if (bytes_to_copy > count && count > 0)
 	{
 		bytes_to_copy = count;
 	}
-	printk("%lld", (long long int)*ppos);
-	printk("Bytes to be written are %d", bytes_to_copy);
 	if (*ppos >= 4)
 	{
-		printk("The offset is greater than or equal to the bytes to be copied.");
 		return -1;
 	}
 	else
@@ -177,12 +187,10 @@ static ssize_t mm_read(struct file *filp, char __user *ubuf, size_t count,
 		int copy_result = 0;
 		if (game_active)
 		{
-			printk("The game is active and the result is written.");
 			copy_result = copy_to_user(ubuf + *ppos, last_result, bytes_to_copy);
 		}
 		else
 		{
-			printk("The game is not active and the default value is written.");
 			copy_result = copy_to_user(ubuf + *ppos, "????", bytes_to_copy);
 		}
 		if (copy_result != 0)
@@ -193,7 +201,15 @@ static ssize_t mm_read(struct file *filp, char __user *ubuf, size_t count,
 		return bytes_to_copy;
 	}
 }
-size_t convert_number_to_array(int number, char **result)
+/**
+ * convert_number_to_array() - takes in a number, converts it into a string and stores the result in 
+ * the result array provided in the arguments
+ * @number: number to be converted
+ * @result: destination array to store the converted string in
+ * 
+ * Return: size of the string
+ * */
+static size_t convert_number_to_array(int number, char **result)
 {
 	int remainder;
 	int digit;
@@ -205,7 +221,6 @@ size_t convert_number_to_array(int number, char **result)
 		remainder = remainder / 10;
 		array_size++;
 	}
-	printk("Size of the array to print is: %d", (int)array_size);
 	*result = vmalloc(array_size);
 	remainder = number;
 	for (i = 0; i < array_size; i++)
@@ -216,44 +231,36 @@ size_t convert_number_to_array(int number, char **result)
 	}
 	return array_size;
 }
-
-void write_last_result_to_user_view(char *user_guess)
+/**
+ * write_last_result_to_user_view() - takes a characte arrays consisting of user's last guess and
+ * writes the result to user view array
+ * @user_guess: user's guess
+ * */
+static void write_last_result_to_user_view(char *user_guess)
 {
-	//Guess 1: 1234 | B1W2
-	char result_to_write[22];
+
+	char result_to_write[USER_VIEW_LINE_SIZE];
 	char *guess_number_char_array;
 	size_t guess_array_size;
-	loff_t current_result_buffer_pointer;
-	scnprintf(result_to_write, 6, "Guess ");
-	current_result_buffer_pointer += 6;
-	guess_array_size = convert_number_to_array(num_guesses, &guess_number_char_array);
-	scnprintf(result_to_write + current_result_buffer_pointer, guess_array_size, guess_number_char_array);
-	current_result_buffer_pointer += guess_array_size;
-	scnprintf(result_to_write + current_result_buffer_pointer, 2, ": ");
-	current_result_buffer_pointer += 2;
-	scnprintf(result_to_write + current_result_buffer_pointer, 4, last_result);
-	current_result_buffer_pointer += 4;
-	scnprintf(result_to_write + current_result_buffer_pointer, 3, " | ");
-	current_result_buffer_pointer += 3;
-	scnprintf(result_to_write + current_result_buffer_pointer, NUM_PEGS, user_guess);
-	current_result_buffer_pointer += NUM_PEGS;
-	scnprintf(result_to_write + current_result_buffer_pointer, 1, "\n");
-	current_result_buffer_pointer += 1;
-	printk(result_to_write);
-	scnprintf(user_view + user_view_pointer, 22, result_to_write);
-	user_view_pointer += 22;
-	user_view_size += 22;
-}
-static void print_user_view(void)
-{
 	size_t i;
-
-	printk("Printing userview.\n");
-
-	for (i = 0; i < user_view_size; i++)
+	loff_t current_result_buffer_pointer;
+	current_result_buffer_pointer = 0;
+	for (i = 0; i < USER_VIEW_LINE_SIZE; i++)
 	{
-		printk(user_view[i]);
+		result_to_write[i] = 0;
 	}
+	current_result_buffer_pointer += scnprintf(result_to_write, 7, "Guess ");
+	guess_array_size = convert_number_to_array(num_guesses, &guess_number_char_array);
+
+	current_result_buffer_pointer += scnprintf(result_to_write + current_result_buffer_pointer, guess_array_size + 1, guess_number_char_array);
+	current_result_buffer_pointer += scnprintf(result_to_write + current_result_buffer_pointer, 3, ": ");
+	current_result_buffer_pointer += scnprintf(result_to_write + current_result_buffer_pointer, 5, last_result);
+	current_result_buffer_pointer += scnprintf(result_to_write + current_result_buffer_pointer, 4, " | ");
+	current_result_buffer_pointer += scnprintf(result_to_write + current_result_buffer_pointer, NUM_PEGS + 1, user_guess);
+	current_result_buffer_pointer += scnprintf(result_to_write + current_result_buffer_pointer, 2, "\n");
+	strcpy(user_view + user_view_pointer, result_to_write);
+	user_view_pointer += USER_VIEW_LINE_SIZE;
+	user_view_size += USER_VIEW_LINE_SIZE;
 }
 
 /**
@@ -285,7 +292,6 @@ mm_write(struct file *filp, const char __user *ubuf,
 	char temp_array[NUM_PEGS] = {};
 	int user_guess[NUM_PEGS] = {};
 	size_t i;
-	size_t j;
 	if (game_active)
 	{
 		if (count < NUM_PEGS)
@@ -304,8 +310,6 @@ mm_write(struct file *filp, const char __user *ubuf,
 			last_result[3] = '0' + correct_value_guesses;
 			num_guesses++;
 			write_last_result_to_user_view(temp_array);
-			print_user_view();
-
 			return count;
 		}
 	}
@@ -370,26 +374,20 @@ static int mm_mmap(struct file *filp, struct vm_area_struct *vma)
 static ssize_t mm_ctl_write(struct file *filp, const char __user *ubuf,
 							size_t count, loff_t *ppos)
 {
-	size_t i;
-	printk("Writing the value to the requried place.\n");
 	char temp_array[8] = {};
 	size_t temp_length = 8;
-	printk("the value of count is %d", count);
 	if (count < 8)
 	{
 		temp_length = count;
 	}
-	printk("The value of temp_length is %ld", (long int)temp_length);
 	copy_from_user(temp_array, ubuf, temp_length);
 
 	if (compare_strings(temp_array, temp_length, "start", 5))
 	{
-		printk("Starting the game");
 		initialize_game();
 	}
 	else if (compare_strings(temp_array, temp_length, "quit", 4))
 	{
-		printk("Quitting the game.");
 		game_active = false;
 	}
 
@@ -410,7 +408,7 @@ static struct miscdevice mastermind_device = {
 	.mode = 0666,
 };
 
-/** strcut to handle call backs to dev/mm */
+/** strcut to handle call backs to dev/mm _ctl*/
 static const struct file_operations mm_ctl_operations = {
 	.write = mm_ctl_write,
 };
@@ -436,9 +434,6 @@ static int __init mastermind_init(void)
 		pr_err("Could not allocate memory\n");
 		return -ENOMEM;
 	}
-
-	/* YOUR CODE HERE */
-	printk("Registering main device.");
 	error = misc_register(&mastermind_device);
 	if (error)
 	{
@@ -446,8 +441,6 @@ static int __init mastermind_init(void)
 		pr_err("can't misc_register :(\n");
 		return error;
 	}
-
-	printk("Registering control device.");
 	error = misc_register(&mastermind_ctl_device);
 	if (error)
 	{
@@ -466,7 +459,7 @@ static void __exit mastermind_exit(void)
 	pr_info("Freeing resources.\n");
 	vfree(user_view);
 
-	/* YOUR CODE HERE */ misc_deregister(&mastermind_device);
+	misc_deregister(&mastermind_device);
 	misc_deregister(&mastermind_ctl_device);
 }
 
