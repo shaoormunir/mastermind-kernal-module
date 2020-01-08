@@ -24,4 +24,13 @@ Then clean the build files using:
 ```sudo make clean```
 
 ## Requirements
-It was tested on Linux Kernel 5.2 source tree. However, it should work on most newer versions of the kernel.
+It was tested on Linux Kernel 5.2 source tree. However, it should work on most newer versions of the kernel. You need to have linux kernel headers installed for linux kernel mod development.
+
+### For Debian based distributions:
+```sudo apt install linux-headers-$(uname -r)```
+### For Redhat distributions:
+```sudo yum -y install kernel-devel kernel-headers```
+
+or 
+
+```sudo dnf -y install kernel-devel kernel-headers```
